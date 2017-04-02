@@ -107,26 +107,33 @@ void sr_handle_arp(struct sr_instance* sr, uint8_t* packet, char* interface)
     struct sr_arp_hdr* a_hdr_recv = (struct sr_arp_hdr*)packet;
 
     if (a_hdr_recv->ar_op == htons(arp_op_request)) {
-
-        // add sender to list
-
         unsigned int len = sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_arp_hdr);
-        uint8_t* buf = (uint8_t*)malloc(len);
-        struct sr_arp_hdr* a_hdr_reply = (struct sr_arp_hdr*)(buf + sizeof(struct sr_ethernet_hdr));
 
+        // create a ethernet packet
+        uint8_t* buf = (uint8_t*)malloc(len);
+        struct sr_ethernet_hdr* e_hdr_reply = (struct sr_ethernet_hdr*)packet;
+        strncpy(e_hdr_reply->ether_dhost, a_hdr_recv->sha, ETHER_ADDR_LEN);
+        strncpy(e_hdr_reply->ether_shost, iface->addr, ETHER_ADDR_LEN);
+        e_hdr_reply->ether_type = htons(ethertype_arp);
+
+        // fill the arp header
+        struct sr_arp_hdr* a_hdr_reply = (struct sr_arp_hdr*)(buf + sizeof(struct sr_ethernet_hdr));
         a_hdr_reply->ar_hrd = htons(arp_hrd_ethernet); // ???????
-        // a_hdr-reply->ar_pro =            // ??????????
+        a_hdr_reply->ar_pro = a_hdr_recv->ar_pro;      // ??????????
         a_hdr_reply->hln = htons(ETHER_ADDR_LEN);
         a_hdr_reply->pln = htons(sizeof(uint32_t));
         a_hdr_reply->op = htons(arp_op_reply);
-        memcpy(a_hdr_reply->sha, iface->addr, ETHER_ADDR_LEN); // ??????
+        strncpy(a_hdr_reply->sha, iface->addr, ETHER_ADDR_LEN); // ??????
         a_hdr_reply->ar_sip = iface->ip;
-        memcpy(a_hdr_reply->tha, a_hdr_recv->sha, ETHER_ADDR_LEN);
+        strncpy(a_hdr_reply->tha, a_hdr_recv->sha, ETHER_ADDR_LEN);
         a_hdr_reply->ar_tip = a_hdr_recv->ar_sip;
+
+        sr_send_packet(sr, buf, len, interface);
 
         free(buf);
 
     } else if (a_hdr_recv->ar_op == htons(arp_op_reply)) {
+
 
     } else {
         Debug("unknown ether type");
