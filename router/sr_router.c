@@ -22,6 +22,10 @@
 #include "sr_arpcache.h"
 #include "sr_utils.h"
 
+void sr_handle_arp(struct sr_instance* sr, uint8_t* packet, char* interface);
+void sr_handle_arp();
+
+
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
  * Scope:  Global
@@ -71,14 +75,61 @@ void sr_handlepacket(struct sr_instance* sr,
         unsigned int len,
         char* interface/* lent */)
 {
-  /* REQUIRES */
-  assert(sr);
-  assert(packet);
-  assert(interface);
+    /* REQUIRES */
+    assert(sr);
+    assert(packet);
+    assert(interface);
 
-  printf("*** -> Received packet of length %d \n",len);
+    printf("*** -> Received packet of length %d \n",len);
 
-  /* fill in code here */
+    /* fill in code here */
+
+    struct sr_if* iface = sr_get_interface(sr, interface);
+    struct sr_ethernet_hdr* e_hdr = 0;
+
+    assert(iface);
+
+    e_hdr = (struct sr_ethernet_hdr*)packet;
+
+    if (e_hdr->ether_type) == htons(ethertype_arp) {
+        sr_handle_arp(sr, packet + sizeof(struct sr_ethernet_hdr), interface);
+    } else if (e_hdr->ether_type == htons(ethertype_ip)) {
+        sr_handle_ip();
+    } else {
+        Debug("unknown ether type");
+    }
 
 }/* end sr_ForwardPacket */
 
+void sr_handle_arp(struct sr_instance* sr, uint8_t* packet, char* interface)
+{
+    struct sr_if* iface = sr_get_interface(sr, interface);
+    struct sr_arp_hdr* a_hdr_recv = (struct sr_arp_hdr*)packet;
+
+    if (a_hdr_recv->ar_op == htons(arp_op_request)) {
+
+        // add sender to list
+
+        unsigned int len = sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_arp_hdr);
+        uint8_t* buf = (uint8_t*)malloc(len);
+        struct sr_arp_hdr* a_hdr_reply = (struct sr_arp_hdr*)(buf + sizeof(struct sr_ethernet_hdr));
+
+        a_hdr_reply->ar_hrd = htons(arp_hrd_ethernet); // ???????
+        // a_hdr-reply->ar_pro =            // ??????????
+        a_hdr_reply->hln = htons(ETHER_ADDR_LEN);
+        a_hdr_reply->pln = htons(sizeof(uint32_t));
+        a_hdr_reply->op = htons(arp_op_reply);
+        memcpy(a_hdr_reply->sha, iface->addr, ETHER_ADDR_LEN); // ??????
+        a_hdr_reply->ar_sip = iface->ip;
+        memcpy(a_hdr_reply->tha, a_hdr_recv->sha, ETHER_ADDR_LEN);
+        a_hdr_reply->ar_tip = a_hdr_recv->ar_sip;
+
+        free(buf);
+
+    } else if (a_hdr_recv->ar_op == htons(arp_op_reply)) {
+
+    } else {
+        Debug("unknown ether type");
+    }
+
+}
