@@ -101,10 +101,10 @@ void sr_handlepacket(struct sr_instance* sr,
 
 }/* end sr_ForwardPacket */
 
-void sr_handle_arp(struct sr_instance* sr, uint8_t* packet, char* interface)
+void sr_handle_arp(struct sr_instance* sr, uint8_t* a_packet, char* interface)
 {
     struct sr_if* iface = sr_get_interface(sr, interface);
-    struct sr_arp_hdr* a_hdr_recv = (struct sr_arp_hdr*)packet;
+    struct sr_arp_hdr* a_hdr_recv = (struct sr_arp_hdr*)a_packet;
 
     if (a_hdr_recv->ar_op == htons(arp_op_request)) {
         unsigned int len = sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_arp_hdr);
@@ -123,9 +123,9 @@ void sr_handle_arp(struct sr_instance* sr, uint8_t* packet, char* interface)
         a_hdr_reply->hln = htons(ETHER_ADDR_LEN);
         a_hdr_reply->pln = htons(sizeof(uint32_t));
         a_hdr_reply->op = htons(arp_op_reply);
-        strncpy(a_hdr_reply->sha, iface->addr, ETHER_ADDR_LEN); // ??????
+        strncpy(a_hdr_reply->ar_sha, iface->addr, ETHER_ADDR_LEN); // ??????
         a_hdr_reply->ar_sip = iface->ip;
-        strncpy(a_hdr_reply->tha, a_hdr_recv->sha, ETHER_ADDR_LEN);
+        strncpy(a_hdr_reply->ar_tha, a_hdr_recv->ar_sha, ETHER_ADDR_LEN);
         a_hdr_reply->ar_tip = a_hdr_recv->ar_sip;
 
         sr_send_packet(sr, buf, len, interface);
@@ -133,6 +133,24 @@ void sr_handle_arp(struct sr_instance* sr, uint8_t* packet, char* interface)
         free(buf);
 
     } else if (a_hdr_recv->ar_op == htons(arp_op_reply)) {
+        struct sr_arpreq* req = sr_arpcache_insert(&(sr->cache), a_hdr_recv->ar_sha, a_hdr_recv->ar_sip);
+
+        //
+        if (req) {
+            // send all packets on the req->packets linked list
+            struct sr_packet* pkt;
+            struct sr_ethernet_hdr* e_hdr_out;
+            for (pkt = req->packets; pkt != NULL; pkt = pkt->next) {
+                e_hdr_out = (struct sr_ethernet_hdr*)pkt->buf;
+                strncpy(e_hdr_out->ether_dhost, a_hdr_recv->ar_sha, ETHER_ADDR_LEN);
+                strncpy(e_hdr_out->ether_shost, iface->addr, ETHER_ADDR_LEN);
+                e_hdr_reply->ether_type = htons(ethertype_ip);
+
+                sr_send_packet(sr, buf, len, interface);
+            }
+
+            sr_arpreq_destroy(&(sr->cache), req);
+        }
 
 
     } else {
