@@ -84,6 +84,7 @@ void sr_handlepacket(struct sr_instance* sr,
     printf("*** -> Received packet of length %d \n",len);
 
     /* fill in code here */
+    print_hdrs(packet, len);
 
     struct sr_if* iface = sr_get_interface(sr, interface);
     struct sr_ethernet_hdr* e_hdr = 0;
@@ -121,8 +122,8 @@ void sr_handle_arp_pkt(struct sr_instance* sr, uint8_t* a_packet, char* interfac
         struct sr_arp_hdr* a_hdr_reply = (struct sr_arp_hdr*)(buf + sizeof(struct sr_ethernet_hdr));
         a_hdr_reply->ar_hrd = htons(arp_hrd_ethernet);
         a_hdr_reply->ar_pro = a_hdr_recv->ar_pro;
-        a_hdr_reply->ar_hln = htons(ETHER_ADDR_LEN);
-        a_hdr_reply->ar_pln = htons(sizeof(uint32_t));
+        a_hdr_reply->ar_hln = ETHER_ADDR_LEN;
+        a_hdr_reply->ar_pln = sizeof(uint32_t);
         a_hdr_reply->ar_op = htons(arp_op_reply);
         memcpy(a_hdr_reply->ar_sha, iface->addr, ETHER_ADDR_LEN);
         a_hdr_reply->ar_sip = iface->ip;
