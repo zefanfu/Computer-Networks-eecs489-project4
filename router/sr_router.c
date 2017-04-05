@@ -13,7 +13,8 @@
 
 #include <stdio.h>
 #include <assert.h>
-
+#include <stdlib.h>
+#include <string.h>
 
 #include "sr_if.h"
 #include "sr_rt.h"
@@ -22,8 +23,8 @@
 #include "sr_arpcache.h"
 #include "sr_utils.h"
 
-void sr_handle_arp(struct sr_instance* sr, uint8_t* packet, char* interface);
-void sr_handle_arp();
+void sr_handle_arp_pkt(struct sr_instance* sr, uint8_t* packet, char* interface);
+void sr_handle_ip_pkt();
 
 
 /*---------------------------------------------------------------------
@@ -91,17 +92,17 @@ void sr_handlepacket(struct sr_instance* sr,
 
     e_hdr = (struct sr_ethernet_hdr*)packet;
 
-    if (e_hdr->ether_type) == htons(ethertype_arp) {
-        sr_handle_arp(sr, packet + sizeof(struct sr_ethernet_hdr), interface);
+    if (e_hdr->ether_type == htons(ethertype_arp)) {
+        sr_handle_arp_pkt(sr, packet + sizeof(struct sr_ethernet_hdr), interface);
     } else if (e_hdr->ether_type == htons(ethertype_ip)) {
-        sr_handle_ip();
+        sr_handle_ip_pkt();
     } else {
         Debug("unknown ether type");
     }
 
 }/* end sr_ForwardPacket */
 
-void sr_handle_arp(struct sr_instance* sr, uint8_t* a_packet, char* interface)
+void sr_handle_arp_pkt(struct sr_instance* sr, uint8_t* a_packet, char* interface)
 {
     struct sr_if* iface = sr_get_interface(sr, interface);
     struct sr_arp_hdr* a_hdr_recv = (struct sr_arp_hdr*)a_packet;
@@ -109,23 +110,23 @@ void sr_handle_arp(struct sr_instance* sr, uint8_t* a_packet, char* interface)
     if (a_hdr_recv->ar_op == htons(arp_op_request)) {
         unsigned int len = sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_arp_hdr);
 
-        // create a ethernet packet
+   
         uint8_t* buf = (uint8_t*)malloc(len);
-        struct sr_ethernet_hdr* e_hdr_reply = (struct sr_ethernet_hdr*)packet;
-        strncpy(e_hdr_reply->ether_dhost, a_hdr_recv->sha, ETHER_ADDR_LEN);
-        strncpy(e_hdr_reply->ether_shost, iface->addr, ETHER_ADDR_LEN);
+        struct sr_ethernet_hdr* e_hdr_reply = (struct sr_ethernet_hdr*)buf;
+        memcpy(e_hdr_reply->ether_dhost, a_hdr_recv->ar_sha, ETHER_ADDR_LEN);
+        memcpy(e_hdr_reply->ether_shost, iface->addr, ETHER_ADDR_LEN);
         e_hdr_reply->ether_type = htons(ethertype_arp);
 
-        // fill the arp header
+        /* fill the arp header */
         struct sr_arp_hdr* a_hdr_reply = (struct sr_arp_hdr*)(buf + sizeof(struct sr_ethernet_hdr));
-        a_hdr_reply->ar_hrd = htons(arp_hrd_ethernet); // ???????
-        a_hdr_reply->ar_pro = a_hdr_recv->ar_pro;      // ??????????
-        a_hdr_reply->hln = htons(ETHER_ADDR_LEN);
-        a_hdr_reply->pln = htons(sizeof(uint32_t));
-        a_hdr_reply->op = htons(arp_op_reply);
-        strncpy(a_hdr_reply->ar_sha, iface->addr, ETHER_ADDR_LEN); // ??????
+        a_hdr_reply->ar_hrd = htons(arp_hrd_ethernet);
+        a_hdr_reply->ar_pro = a_hdr_recv->ar_pro;
+        a_hdr_reply->ar_hln = htons(ETHER_ADDR_LEN);
+        a_hdr_reply->ar_pln = htons(sizeof(uint32_t));
+        a_hdr_reply->ar_op = htons(arp_op_reply);
+        memcpy(a_hdr_reply->ar_sha, iface->addr, ETHER_ADDR_LEN);
         a_hdr_reply->ar_sip = iface->ip;
-        strncpy(a_hdr_reply->ar_tha, a_hdr_recv->ar_sha, ETHER_ADDR_LEN);
+        memcpy(a_hdr_reply->ar_tha, a_hdr_recv->ar_sha, ETHER_ADDR_LEN);
         a_hdr_reply->ar_tip = a_hdr_recv->ar_sip;
 
         sr_send_packet(sr, buf, len, interface);
@@ -135,18 +136,21 @@ void sr_handle_arp(struct sr_instance* sr, uint8_t* a_packet, char* interface)
     } else if (a_hdr_recv->ar_op == htons(arp_op_reply)) {
         struct sr_arpreq* req = sr_arpcache_insert(&(sr->cache), a_hdr_recv->ar_sha, a_hdr_recv->ar_sip);
 
-        //
         if (req) {
-            // send all packets on the req->packets linked list
+            /* send all packets on the req->packets linked list */
             struct sr_packet* pkt;
             struct sr_ethernet_hdr* e_hdr_out;
             for (pkt = req->packets; pkt != NULL; pkt = pkt->next) {
-                e_hdr_out = (struct sr_ethernet_hdr*)pkt->buf;
-                strncpy(e_hdr_out->ether_dhost, a_hdr_recv->ar_sha, ETHER_ADDR_LEN);
-                strncpy(e_hdr_out->ether_shost, iface->addr, ETHER_ADDR_LEN);
-                e_hdr_reply->ether_type = htons(ethertype_ip);
+                uint8_t* buf = (uint8_t*)malloc(pkt->len);
+                memcpy(buf, pkt->buf, pkt->len);
+                e_hdr_out = (struct sr_ethernet_hdr*)buf;
+                memcpy(e_hdr_out->ether_dhost, a_hdr_recv->ar_sha, ETHER_ADDR_LEN);
+                memcpy(e_hdr_out->ether_shost, iface->addr, ETHER_ADDR_LEN);
+                e_hdr_out->ether_type = htons(ethertype_ip);
 
-                sr_send_packet(sr, buf, len, interface);
+                sr_send_packet(sr, buf, pkt->len, interface);
+
+                free(buf);
             }
 
             sr_arpreq_destroy(&(sr->cache), req);
@@ -158,3 +162,5 @@ void sr_handle_arp(struct sr_instance* sr, uint8_t* a_packet, char* interface)
     }
 
 }
+
+void sr_handle_ip_pkt() {}
