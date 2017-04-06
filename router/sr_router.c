@@ -24,7 +24,9 @@
 #include "sr_utils.h"
 
 void sr_handle_arp_pkt(struct sr_instance* sr, uint8_t* packet, char* interface);
-void sr_handle_ip_pkt();
+void sr_handle_ip_pkt(struct sr_instance* sr, uint8_t* packet, unsigned int len, char* interface);
+int sr_for_us(struct sr_instance* sr, uint8_t* packet);
+int sr_is_icmp_echo(struct sr_instance* sr, uint8_t* packet);
 
 
 /*---------------------------------------------------------------------
@@ -96,7 +98,7 @@ void sr_handlepacket(struct sr_instance* sr,
     if (e_hdr->ether_type == htons(ethertype_arp)) {
         sr_handle_arp_pkt(sr, packet + sizeof(struct sr_ethernet_hdr), interface);
     } else if (e_hdr->ether_type == htons(ethertype_ip)) {
-        sr_handle_ip_pkt();
+        sr_handle_ip_pkt(sr, packet, len, interface);
     } else {
         Debug("unknown ether type");
     }
@@ -164,4 +166,75 @@ void sr_handle_arp_pkt(struct sr_instance* sr, uint8_t* a_packet, char* interfac
 
 }
 
-void sr_handle_ip_pkt() {}
+void sr_handle_ip_pkt(struct sr_instance* sr, uint8_t* packet, unsigned int len, char* interface) 
+{
+    assert(sr);
+    assert(packet);
+    assert(interface);
+
+    struct sr_if* iface = sr_get_interface(sr, interface);
+    struct sr_ethernet_hdr* e_hdr_recv = (struct sr_ethernet_hdr*)packet;
+    struct sr_ip_hdr* ip_hdr_recv = (struct sr_ip_hdr*)(packet + sizeof(struct sr_ethernet_hdr));
+
+    uint8_t* buf;
+    unsigned int buf_len;
+    struct sr_ethernet_hdr* e_hdr_send = (struct sr_ethernet_hdr*)buf;
+    struct sr_ip_hdr* ip_hdr_send = (struct sr_ip_hdr*)(buf + sizeof(struct sr_ethernet_hdr));
+
+    if (sr_for_us(sr, packet + sizeof(struct sr_ethernet_hdr))) {
+
+        if (sr_is_icmp_echo(sr, packet + sizeof(struct sr_ethernet_hdr))) {
+            buf_len = len;
+            buf = (uint8_t*)malloc(buf_len);
+            uint8_t* old_icmp_packet = packet + sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr);
+            uint8_t* new_icmp_packet = buf + sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr);
+            /* copy original icmp echo ??????????????*/
+            memcpy(new_icmp_packet, old_icmp_packet, len - sizeof(struct sr_ethernet_hdr) - sizeof(struct sr_ip_hdr));
+        } else {
+
+        }
+
+
+
+
+
+    } else {
+
+    }
+}
+
+int sr_for_us(struct sr_instance *sr, uint8_t* ip_packet) 
+{
+    assert(sr);
+    assert(ip_packet);
+
+    struct sr_ip_hdr* ip_hdr = (struct sr_ip_hdr*)ip_packet;
+    struct sr_if* if_walker = NULL;
+
+    for (if_walker = sr->if_list; if_walker != NULL; if_walker = if_walker->next) {
+        if (if_walker->ip == ip_hdr->ip_dst) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+int sr_is_icmp_echo(struct sr_instance *sr, uint8_t* ip_packet) 
+{
+    assert(sr);
+    assert(ip_packet);
+
+    struct sr_ip_hdr* ip_hdr = (struct sr_ip_hdr*)ip_packet;
+    if (ip_hdr->ip_p != ip_protocol_icmp) {
+        return 0;
+    }
+
+    struct sr_icmp_hdr* icmp_hdr = (struct sr_icmp_hdr*)(ip_packet + sizeof(struct sr_ip_hdr));
+    if (icmp_hdr->icmp_type != 0) {
+        return 0;
+    }
+
+    return 1;
+
+}
