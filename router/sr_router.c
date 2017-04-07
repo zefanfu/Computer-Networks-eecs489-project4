@@ -288,3 +288,18 @@ void sr_set_ether_hdr(uint8_t* buf, uint8_t* dhost, uint8_t* shost, uint16_t typ
     memcpy(e_hdr->ether_shost, shost, ETHER_ADDR_LEN);
     e_hdr->ether_type = htons(type);
 }
+
+/* return 0xFFFFFFFF */
+uint32_t sr_get_LPM(struct sr_instance* sr, uint32_t ip_dst) {
+    struct sr_rt* rt_walker = NULL;
+    uint32_t max_mask = 0;
+    uint32_t result_ip = 0xFFFFFFFF;
+    for (rt_walker = sr->routing_table; rt_walker != NULL; rt_walker = rt_walker->next) {
+        if ( (rt_walker->dest.s_addr == (ip_dst & rt_walker->mask.s_addr)) &&
+            (rt_walker->mask.s_addr >= max_mask)) {
+                result_ip = rt_walker->gw.s_addr;
+                max_mask = rt_walker->mask.s_addr;
+        }
+    }
+    return result_ip;
+}
