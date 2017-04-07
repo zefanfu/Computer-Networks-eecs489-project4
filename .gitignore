@@ -1,4 +1,7 @@
 *~
 *.pyo
 *.pyc
+*.d
 /solution/*
+sr
+*/sr
