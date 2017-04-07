@@ -23,11 +23,6 @@
 #include "sr_arpcache.h"
 #include "sr_utils.h"
 
-void sr_handle_arp_pkt(struct sr_instance* sr, uint8_t* packet, char* interface);
-void sr_handle_ip_pkt(struct sr_instance* sr, uint8_t* packet, unsigned int len, char* interface);
-int sr_for_us(struct sr_instance* sr, uint8_t* packet);
-int sr_is_icmp_echo(struct sr_instance* sr, uint8_t* packet);
-
 
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
@@ -193,11 +188,13 @@ void sr_handle_ip_pkt(struct sr_instance* sr, uint8_t* packet, unsigned int len,
             /* sr_set_ip_hdr(uint8_t* buf, unsigned int ip_hl, unsigned int ip_v, uint8_t ip_tos, uint16_t ip_len, 
             uint16_t ip_id, uint16_t ip_off, uint8_t ip_ttl, uint8_t ip_p, uint32_t ip_src, uint32_t ip_dst) */
             sr_set_ip_hdr(buf + sizeof(struct sr_ethernet_hdr), 5, 4, 0, buf_len - sizeof(struct sr_ethernet_hdr),
-                ip_hdr_recv->ip_id /* ?? */, 0, 64, ip_protocol_icmp, ip_hdr_recv->ip_dst /* ?? */, ip_hdr_recv->ip_src);
+                ip_hdr_recv->ip_id /* ?? */, 0, 64, ip_protocol_icmp, ntohl(ip_hdr_recv->ip_dst) /* ?? */, ntohl(ip_hdr_recv->ip_src));
             /* what is ip sender */
 
             sr_set_ether_hdr(buf, e_hdr_recv->ether_shost, iface->addr, ethertype_ip);
 
+            printf("send:\n");
+            print_hdrs(buf, buf_len);
             sr_send_packet(sr, buf, buf_len, interface);
 
             free(buf);
@@ -289,5 +286,5 @@ void sr_set_ether_hdr(uint8_t* buf, uint8_t* dhost, uint8_t* shost, uint16_t typ
     struct sr_ethernet_hdr* e_hdr = (struct sr_ethernet_hdr*)buf;
     memcpy(e_hdr->ether_dhost, dhost, ETHER_ADDR_LEN);
     memcpy(e_hdr->ether_shost, shost, ETHER_ADDR_LEN);
-    e_hdr->ether_type = type;
+    e_hdr->ether_type = htons(type);
 }
