@@ -71,12 +71,15 @@ void sr_handlepacket(struct sr_instance* , uint8_t * , unsigned int , char* );
 void sr_handle_arp_pkt(struct sr_instance* sr, uint8_t* packet, char* interface);
 void sr_handle_ip_pkt(struct sr_instance* sr, uint8_t* packet, unsigned int len, char* interface);
 int sr_for_us(struct sr_instance* sr, uint8_t* packet);
-int sr_is_icmp_echo(struct sr_instance* sr, uint8_t* packet);
+int sr_is_icmp_echo(uint8_t* ip_packet, unsigned int len);
 void sr_set_icmp_echo_hdr(uint8_t* buf, uint8_t* req_packet, unsigned int len);
 void sr_set_icmp3_hdr(uint8_t* packet, uint8_t type, uint8_t code, uint16_t next_mtu, uint8_t* data);
 void sr_set_ip_hdr(uint8_t* buf, unsigned int ip_hl, unsigned int ip_v, uint8_t ip_tos, uint16_t ip_len, 
     uint16_t ip_id, uint16_t ip_off, uint8_t ip_ttl, uint8_t ip_p, uint32_t ip_src, uint32_t ip_dst);
 void sr_set_ether_hdr(uint8_t* buf, uint8_t* dhost, uint8_t* shost, uint16_t type);
+uint32_t sr_get_LPM(struct sr_instance* sr, uint32_t ip_dst);
+int sr_ip_sum_valid(uint8_t* packet, unsigned int len);
+int sr_icmp_sum_valid(uint8_t* packet, unsigned int len);
 
 /* -- sr_if.c -- */
 void sr_add_interface(struct sr_instance* , const char* );

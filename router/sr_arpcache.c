@@ -11,7 +11,8 @@
 #include "sr_if.h"
 #include "sr_protocol.h"
 
-void handle_arpreq(struct sr_arpreq* req, struct sr_instance* sr) {
+void handle_arpreq(struct sr_instance* sr, struct sr_arpreq* req)
+{
     unsigned int len; /* length of packet to be sent */
     time_t now = time(NULL);
 
@@ -34,10 +35,7 @@ void handle_arpreq(struct sr_arpreq* req, struct sr_instance* sr) {
                 ip_hdr_pkt = (struct sr_ip_hdr*)(pkt->buf + sizeof(struct sr_ethernet_hdr));
 
                 /* set ethernet header */
-                e_hdr_icmp = (struct sr_ethernet_hdr*)buf_to_sent;
-                memcpy(e_hdr_icmp->ether_dhost, e_hdr_pkt->ether_shost, ETHER_ADDR_LEN);
-                memcpy(e_hdr_icmp->ether_shost, e_hdr_pkt->ether_dhost, ETHER_ADDR_LEN);
-                e_hdr_icmp->ether_type = htons(ethertype_ip);
+                sr_set_ether_hdr(buf_to_sent, e_hdr_pkt->ether_shost, e_hdr_pkt->ether_dhost, ethertype_ip);
 
                 /* set ip header */
                 ip_hdr_icmp = (struct sr_ip_hdr*)(buf_to_sent + sizeof(struct sr_ethernet_hdr));
@@ -56,12 +54,11 @@ void handle_arpreq(struct sr_arpreq* req, struct sr_instance* sr) {
             /* construct a eth packet to send arp req */
             len = sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_arp_hdr);
             uint8_t* buf = (uint8_t*)malloc(len);
-            struct sr_ethernet_hdr* e_hdr = (struct sr_ethernet_hdr*)buf;
-            memset(e_hdr->ether_dhost, 0xFF, ETHER_ADDR_LEN);
+
             char *interface = req->packets->iface;
             struct sr_if* iface = sr_get_interface(sr, interface);
-            memcpy(e_hdr->ether_shost, iface->addr, ETHER_ADDR_LEN);
-            e_hdr->ether_type = htons(ethertype_arp);
+
+            sr_set_ether_hdr(buf, NULL, iface->addr, ethertype_ip);
 
             /* fill the arp header */
             struct sr_arp_hdr* a_hdr = (struct sr_arp_hdr*)(buf + sizeof(struct sr_ethernet_hdr));
@@ -95,7 +92,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
     /* Fill this in */
     struct sr_arpreq* req;
     for (req = sr->cache.requests; req != NULL; req = req->next) {
-        handle_arpreq(req, sr);
+        handle_arpreq(sr, req);
     }
 }
 
