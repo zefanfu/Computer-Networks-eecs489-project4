@@ -23,6 +23,8 @@
 #include "sr_arpcache.h"
 #include "sr_utils.h"
 
+/*static uint16_t idNum = 0;*/
+
 
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
@@ -192,23 +194,38 @@ void sr_handle_ip_pkt(struct sr_instance* sr, uint8_t* packet, unsigned int len,
 
                 sr_set_icmp_echo_hdr(buf + sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr),
                     packet + sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr),
-                    buf_len - sizeof(struct sr_ethernet_hdr) - sizeof(struct sr_ip_hdr));
-
-
-                /* 
-                void sr_set_ip_hdr(uint8_t* buf, unsigned int ip_hl, unsigned int ip_v, uint8_t ip_tos, uint16_t ip_len, 
+                    buf_len - sizeof(struct sr_ethernet_hdr) - sizeof(struct sr_ip_hdr));   
+                /*void sr_set_ip_hdr(uint8_t* buf, unsigned int ip_hl, unsigned int ip_v, uint8_t ip_tos, uint16_t ip_len, 
     uint16_t ip_id, uint16_t ip_off, uint8_t ip_ttl, uint8_t ip_p, uint32_t ip_src, uint32_t ip_dst) {
                 */
                 sr_set_ip_hdr(buf + sizeof(struct sr_ethernet_hdr), 5, 4, 0, buf_len - sizeof(struct sr_ethernet_hdr),
                     ip_hdr_recv->ip_id , htons(IP_DF), 64, ip_protocol_icmp, ntohl(dest_to_src(sr, ip_hdr_recv->ip_dst)), ntohl(ip_hdr_recv->ip_src));
-                
+
+                    /*ntohl(ip_hdr_recv->ip_dst),ntohl(ip_hdr_recv->ip_src));*/
+                    /*
+                    ntohl(dest_to_src(sr, ip_hdr_recv->ip_dst)), ntohl(ip_hdr_recv->ip_src));*/
+                /*idNum++;*/
 
                 sr_set_ether_hdr(buf, e_hdr_recv->ether_shost, iface->addr, ethertype_ip);
-
-                printf("send:\n");
+                fprintf(stderr, "ping send:\n");
                 print_hdrs(buf, buf_len);
-                sr_send_packet(sr, buf, buf_len, interface);
 
+                struct sr_rt* rt_line=dest_to_rt(sr, ip_hdr_recv->ip_dst);
+                struct sr_arpentry* arpmap=sr_arpcache_lookup(&(sr->cache), ntohl(rt_line->gw.s_addr));
+                if (arpmap){
+                    struct sr_ethernet_hdr* e_hdr = (struct sr_ethernet_hdr*)buf;
+                    memcpy(e_hdr->ether_dhost, arpmap->mac, ETHER_ADDR_LEN);
+                    sr_send_packet(sr, buf, buf_len, rt_line->interface);            
+                }
+                else{
+                    /*send arp request*/
+                    struct sr_arpreq* arpreq = sr_arpcache_queuereq(&(sr->cache), ntohl(rt_line->gw.s_addr),buf, buf_len, rt_line->interface);
+                    if (arpreq->times_sent == 0)
+                    {                    
+                        handle_arpreq(arpreq, sr);
+                    }
+                }
+                free(arpmap);
                 free(buf);
 
             } 
@@ -227,8 +244,11 @@ void sr_handle_ip_pkt(struct sr_instance* sr, uint8_t* packet, unsigned int len,
 
                     sr_set_ether_hdr(buf, e_hdr_recv->ether_shost, iface->addr, ethertype_ip);
 
-                    printf("send:\n");
+                    fprintf(stderr, "ping send:\n");
                     print_hdrs(buf, buf_len);
+
+
+
                     sr_send_packet(sr, buf, buf_len, interface);
 
                     free(buf);
@@ -282,7 +302,7 @@ int sr_is_icmp_echo(struct sr_instance *sr, uint8_t* ip_packet)
 }
 
 void sr_set_icmp_echo_hdr(uint8_t* buf, uint8_t* req_packet, unsigned int len) {
-    /* ??????????????? */
+    
     memcpy(buf, req_packet, len); /* copy identifier, seqNum and data */
 
     struct sr_icmp_hdr* icmp_hdr = (struct sr_icmp_hdr*)buf;
@@ -346,4 +366,21 @@ uint32_t dest_to_src(struct sr_instance* sr, uint32_t ip_dst){
     }
     struct sr_if* interface=sr_get_interface(sr, rt_lpm->interface);
     return interface->ip;
+}
+
+struct sr_rt* dest_to_rt(struct sr_instance* sr, uint32_t ip_dst){
+    struct sr_rt* rt_walker = NULL;
+    /* uint32_t max_mask = 0;*/
+    struct sr_rt* max_mask_rt =  malloc(sizeof(struct sr_rt*));
+    struct sr_rt* rt_lpm = NULL;
+    /* uint32_t result_ip = 0xFFFFFFFF;*/
+    for (rt_walker = sr->routing_table; rt_walker != NULL; rt_walker = rt_walker->next) {
+        if ( ((rt_walker->dest.s_addr& rt_walker->mask.s_addr) == (ip_dst & rt_walker->mask.s_addr)) &&
+            (rt_walker->mask.s_addr >= max_mask_rt->mask.s_addr)) {
+                rt_lpm = rt_walker;
+                max_mask_rt->mask.s_addr = rt_walker->mask.s_addr;
+        }
+    }
+    /*struct sr_if* interface=sr_get_interface(sr, rt_lpm->interface);*/
+    return rt_lpm;
 }

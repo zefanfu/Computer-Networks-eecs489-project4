@@ -78,6 +78,7 @@ void sr_set_ip_hdr(uint8_t* buf, unsigned int ip_hl, unsigned int ip_v, uint8_t 
     uint16_t ip_id, uint16_t ip_off, uint8_t ip_ttl, uint8_t ip_p, uint32_t ip_src, uint32_t ip_dst);
 void sr_set_ether_hdr(uint8_t* buf, uint8_t* dhost, uint8_t* shost, uint16_t type);
 uint32_t dest_to_src(struct sr_instance* sr, uint32_t ip_dst);
+struct sr_rt* dest_to_rt(struct sr_instance* sr, uint32_t ip_dst);
 /* -- sr_if.c -- */
 void sr_add_interface(struct sr_instance* , const char* );
 void sr_set_ether_ip(struct sr_instance* , uint32_t );
