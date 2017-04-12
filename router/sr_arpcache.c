@@ -29,14 +29,12 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq* req)
 
                 /* set icmp */
                 sr_set_icmp3_hdr(buf_to_sent + sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr),
-                    3, 1, 1234/* ?? */, pkt->buf + sizeof(struct sr_ethernet_hdr));
+                    3, 1, 1234/* mtu */, pkt->buf + sizeof(struct sr_ethernet_hdr));
 
                 /* set ip header */
                 struct sr_ip_hdr* old_ip_hdr = (struct sr_ip_hdr*)(pkt->buf + sizeof(struct sr_ethernet_hdr));
                 struct sr_rt* next_hop = sr_get_LPM(sr, old_ip_hdr->ip_src);
-                if (next_hop == NULL) {
-                    break;
-                }
+                
                 struct sr_if* src_iface = sr_get_interface(sr, next_hop->interface);
 
                 sr_set_ip_hdr(buf_to_sent + sizeof(struct sr_ethernet_hdr), 5, 4, 0, len - sizeof(struct sr_ethernet_hdr),
@@ -57,27 +55,21 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq* req)
 
         } else {
             /* construct a eth packet to send arp req */
+            printf("arp1.......\n");
             len = sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_arp_hdr);
             uint8_t* buf = (uint8_t*)malloc(len);
 
             char *interface = req->packets->iface;
             struct sr_if* iface = sr_get_interface(sr, interface);
 
-            sr_set_ether_hdr(buf, NULL, iface->addr, ethertype_ip);
+            sr_set_ether_hdr(buf, NULL, iface->addr, ethertype_arp);
 
             /* fill the arp header */
-            struct sr_arp_hdr* a_hdr = (struct sr_arp_hdr*)(buf + sizeof(struct sr_ethernet_hdr));
-            a_hdr->ar_hrd = htons(arp_hrd_ethernet);
-            a_hdr->ar_pro = htons(ethertype_ip);
-            a_hdr->ar_hln = htons(ETHER_ADDR_LEN);
-            a_hdr->ar_pln = htonl(sizeof(uint32_t));
-            a_hdr->ar_op = arp_op_request;
-            memcpy(a_hdr->ar_sha, iface->addr, ETHER_ADDR_LEN);
-            a_hdr->ar_sip = iface->ip;
-            memset(a_hdr->ar_tha, 0, ETHER_ADDR_LEN);
-            a_hdr->ar_tip = req->ip;
+            sr_set_arp_hdr(buf + sizeof(struct sr_ethernet_hdr), arp_op_request, iface->addr, iface->ip, NULL, req->ip);
 
             sr_send_packet(sr, buf, len, interface);
+            print_hdrs(buf, len);
+            printf("arp2.......\n");
 
             free(buf);
 

@@ -133,7 +133,7 @@ void sr_handle_arp_pkt(struct sr_instance* sr, uint8_t* a_packet, char* interfac
 
     } else if (a_hdr_recv->ar_op == htons(arp_op_reply)) {
         struct sr_arpreq* req = sr_arpcache_insert(&(sr->cache), a_hdr_recv->ar_sha, a_hdr_recv->ar_sip);
-
+        
         if (req) {
             /* send all packets on the req->packets linked list */
             struct sr_packet* pkt;
@@ -181,9 +181,30 @@ void sr_handle_ip_pkt(struct sr_instance* sr, uint8_t* packet, unsigned int len,
     }
 
     if (ip_hdr_recv->ip_ttl <= 1) {
-        
+        buf_len = sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr) + sizeof(struct sr_icmp_t3_hdr);
+        buf = (uint8_t*)malloc(buf_len);
 
-        /* send icmp time exceed */
+        /* set icmp */
+        sr_set_icmp3_hdr(buf + sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr),
+            11, 0, 1234/* mtu */, packet + sizeof(struct sr_ethernet_hdr));
+
+        /* set ip header */
+        struct sr_rt* next_hop = sr_get_LPM(sr, ip_hdr_recv->ip_src);
+
+        printf("ttl:.....%s\n", next_hop->interface);
+
+        struct sr_if* src_iface = sr_get_interface(sr, next_hop->interface);
+
+        sr_set_ip_hdr(buf + sizeof(struct sr_ethernet_hdr), 5, 4, 0, buf_len - sizeof(struct sr_ethernet_hdr),
+            ip_id_num, 0 /* offset */, 64, ip_protocol_icmp  ,src_iface->ip/* src */, ntohl(ip_hdr_recv->ip_src)/* dst */);
+        ip_id_num++;
+
+        /* set ethernet header */
+        sr_set_ether_hdr(buf, e_hdr_recv->ether_shost, e_hdr_recv->ether_dhost, ethertype_ip);
+
+        sr_send_packet(sr, buf, buf_len, next_hop->interface);
+        
+        free(buf);
 
         return;
     }
@@ -220,6 +241,28 @@ void sr_handle_ip_pkt(struct sr_instance* sr, uint8_t* packet, unsigned int len,
 
         } else { /* not icmp echo request*/
             /* send icmp port unreachable */
+            buf_len = sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr) + sizeof(struct sr_icmp_t3_hdr);
+            buf = (uint8_t*)malloc(buf_len);
+
+            /* set icmp */
+            sr_set_icmp3_hdr(buf + sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr),
+                3, 3, 1234/* mtu */, packet + sizeof(struct sr_ethernet_hdr));
+
+            /* set ip header */
+            struct sr_rt* next_hop = sr_get_LPM(sr, ip_hdr_recv->ip_src);
+            
+            struct sr_if* src_iface = sr_get_interface(sr, next_hop->interface);
+
+            sr_set_ip_hdr(buf + sizeof(struct sr_ethernet_hdr), 5, 4, 0, buf_len - sizeof(struct sr_ethernet_hdr),
+                ip_id_num, 0 /* offset */, 64, ip_protocol_icmp  ,src_iface->ip/* src */, ntohl(ip_hdr_recv->ip_src)/* dst */);
+            ip_id_num++;
+
+            /* set ethernet header */
+            sr_set_ether_hdr(buf, e_hdr_recv->ether_shost, e_hdr_recv->ether_dhost, ethertype_ip);
+
+            sr_send_packet(sr, buf, buf_len, next_hop->interface);
+            
+            free(buf);
             return;
         }
 
@@ -245,7 +288,7 @@ void sr_handle_ip_pkt(struct sr_instance* sr, uint8_t* packet, unsigned int len,
         struct sr_ip_hdr* ip_hdr_send = (struct sr_ip_hdr*)(buf + sizeof(struct sr_ethernet_hdr));
         ip_hdr_send->ip_ttl--;
         ip_hdr_send->ip_sum = 0;
-        ip_hdr_send->ip_sum = cksum(buf + sizeof(struct sr_ethernet_hdr), ip_hdr_send->ip_len);
+        ip_hdr_send->ip_sum = cksum(buf + sizeof(struct sr_ethernet_hdr), ntohs(ip_hdr_send->ip_len));
 
         struct sr_arpentry *entry = sr_arpcache_lookup(&(sr->cache), next_hop->gw.s_addr);
 
@@ -355,14 +398,18 @@ void sr_set_arp_hdr(uint8_t* buf, unsigned short op, unsigned char* sha, uint32_
 {
     struct sr_arp_hdr* a_hdr = (struct sr_arp_hdr*)buf;
     a_hdr->ar_hrd = htons(arp_hrd_ethernet);
-    a_hdr->ar_pro = 0x0800; /* ??????????????????? */
+    a_hdr->ar_pro = htons(0x0800); /* ??????????????????? */
     a_hdr->ar_hln = ETHER_ADDR_LEN;
     a_hdr->ar_pln = sizeof(uint32_t);
     a_hdr->ar_op = htons(op);
     memcpy(a_hdr->ar_sha, sha, ETHER_ADDR_LEN);
     a_hdr->ar_sip = sip;
-    memcpy(a_hdr->ar_tha, tha, ETHER_ADDR_LEN);
-    a_hdr->ar_tip = sip;
+    if (tha) {
+        memcpy(a_hdr->ar_tha, tha, ETHER_ADDR_LEN);
+    } else {
+        memset(a_hdr->ar_tha, 0, ETHER_ADDR_LEN);
+    }
+    a_hdr->ar_tip = tip;
 }
 
 void sr_set_ether_hdr(uint8_t* buf, uint8_t* dhost, uint8_t* shost, uint16_t type)
