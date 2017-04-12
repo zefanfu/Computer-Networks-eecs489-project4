@@ -38,7 +38,7 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq* req)
                 struct sr_if* src_iface = sr_get_interface(sr, next_hop->interface);
 
                 sr_set_ip_hdr(buf_to_sent + sizeof(struct sr_ethernet_hdr), 5, 4, 0, len - sizeof(struct sr_ethernet_hdr),
-                    ip_id_num, 0 /* offset */, 64, ip_protocol_icmp  ,src_iface->ip/* src */, ntohl(old_ip_hdr->ip_src)/* dst */);
+                    ip_id_num, 0 /* offset */, 64, ip_protocol_icmp  ,ntohl(src_iface->ip)/* src */, ntohl(old_ip_hdr->ip_src)/* dst */);
                 ip_id_num++;
 
                 /* set ethernet header */
