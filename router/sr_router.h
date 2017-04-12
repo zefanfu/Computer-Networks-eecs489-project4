@@ -56,6 +56,8 @@ struct sr_instance
     FILE* logfile;
 };
 
+static uint16_t ip_id_num = 0;
+
 /* -- sr_main.c -- */
 int sr_verify_routing_table(struct sr_instance* sr);
 
@@ -77,7 +79,7 @@ void sr_set_icmp3_hdr(uint8_t* packet, uint8_t type, uint8_t code, uint16_t next
 void sr_set_ip_hdr(uint8_t* buf, unsigned int ip_hl, unsigned int ip_v, uint8_t ip_tos, uint16_t ip_len, 
     uint16_t ip_id, uint16_t ip_off, uint8_t ip_ttl, uint8_t ip_p, uint32_t ip_src, uint32_t ip_dst);
 void sr_set_ether_hdr(uint8_t* buf, uint8_t* dhost, uint8_t* shost, uint16_t type);
-uint32_t sr_get_LPM(struct sr_instance* sr, uint32_t ip_dst);
+struct sr_rt* sr_get_LPM(struct sr_instance* sr, uint32_t ip_dst);
 int sr_ip_sum_valid(uint8_t* packet, unsigned int len);
 int sr_icmp_sum_valid(uint8_t* packet, unsigned int len);
 

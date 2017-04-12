@@ -9,6 +9,7 @@
 #include "sr_arpcache.h"
 #include "sr_router.h"
 #include "sr_if.h"
+#include "sr_rt.h"
 #include "sr_protocol.h"
 
 void handle_arpreq(struct sr_instance* sr, struct sr_arpreq* req)
@@ -22,27 +23,31 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq* req)
             uint8_t* buf_to_sent = (uint8_t*)malloc(len);
 
             struct sr_packet* pkt;
-            struct sr_ethernet_hdr* e_hdr_pkt;
-            struct sr_ip_hdr* ip_hdr_pkt;
-            struct sr_ethernet_hdr* e_hdr_icmp;
-            struct sr_ip_hdr* ip_hdr_icmp;
-            struct sr_icmp_t3_hdr* icmp_hdr;
-
 
             /* for each packet, send icmp host unreachable */
             for (pkt = req->packets; pkt != NULL; pkt = pkt->next) {
-                e_hdr_pkt = (struct sr_ethernet_hdr*)(pkt->buf);
-                ip_hdr_pkt = (struct sr_ip_hdr*)(pkt->buf + sizeof(struct sr_ethernet_hdr));
-
-                /* set ethernet header */
-                sr_set_ether_hdr(buf_to_sent, e_hdr_pkt->ether_shost, e_hdr_pkt->ether_dhost, ethertype_ip);
-
-                /* set ip header */
-                ip_hdr_icmp = (struct sr_ip_hdr*)(buf_to_sent + sizeof(struct sr_ethernet_hdr));
-        
 
                 /* set icmp */
-                icmp_hdr = (struct sr_icmp_t3_hdr*)(ip_hdr_icmp + sizeof(struct sr_ip_hdr));
+                sr_set_icmp3_hdr(buf_to_sent + sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr),
+                    3, 1, 1234/* ?? */, pkt->buf + sizeof(struct sr_ethernet_hdr));
+
+                /* set ip header */
+                struct sr_ip_hdr* old_ip_hdr = (struct sr_ip_hdr*)(pkt->buf + sizeof(struct sr_ethernet_hdr));
+                struct sr_rt* next_hop = sr_get_LPM(sr, old_ip_hdr->ip_src);
+                if (next_hop == NULL) {
+                    break;
+                }
+                struct sr_if* src_iface = sr_get_interface(sr, next_hop->interface);
+
+                sr_set_ip_hdr(buf_to_sent + sizeof(struct sr_ethernet_hdr), 5, 4, 0, len - sizeof(struct sr_ethernet_hdr),
+                    ip_id_num, 0 /* offset */, 64, ip_protocol_icmp  ,src_iface->ip/* src */, ntohl(old_ip_hdr->ip_src)/* dst */);
+                ip_id_num++;
+
+                /* set ethernet header */
+                struct sr_ethernet_hdr* old_e_hdr = (struct sr_ethernet_hdr*)pkt->buf;
+                sr_set_ether_hdr(buf_to_sent, old_e_hdr->ether_shost, old_e_hdr->ether_dhost, ethertype_ip);
+
+                sr_send_packet(sr, buf_to_sent, len, next_hop->interface);
 
             }
 
