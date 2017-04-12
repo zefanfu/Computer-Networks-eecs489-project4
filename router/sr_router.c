@@ -107,7 +107,7 @@ void sr_handle_arp_pkt(struct sr_instance* sr, uint8_t* a_packet, char* interfac
 
     if (a_hdr_recv->ar_op == htons(arp_op_request)) {
         unsigned int len = sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_arp_hdr);
-
+        struct sr_arpreq* req = sr_arpcache_insert(&(sr->cache), a_hdr_recv->ar_sha, a_hdr_recv->ar_sip);
    
         uint8_t* buf = (uint8_t*)malloc(len);
         struct sr_ethernet_hdr* e_hdr_reply = (struct sr_ethernet_hdr*)buf;
