@@ -55,7 +55,6 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq* req)
 
         } else {
             /* construct a eth packet to send arp req */
-            printf("arp1.......\n");
             len = sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_arp_hdr);
             uint8_t* buf = (uint8_t*)malloc(len);
 
@@ -68,9 +67,7 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq* req)
             sr_set_arp_hdr(buf + sizeof(struct sr_ethernet_hdr), arp_op_request, iface->addr, iface->ip, NULL, req->ip);
 
             sr_send_packet(sr, buf, len, interface);
-            print_hdrs(buf, len);
-            printf("arp2.......\n");
-
+            
             free(buf);
 
             req->sent = now;

@@ -179,36 +179,6 @@ void sr_handle_ip_pkt(struct sr_instance* sr, uint8_t* packet, unsigned int len,
     if (!sr_ip_sum_valid(packet + sizeof(struct sr_ethernet_hdr), sizeof(struct sr_ip_hdr))) {
         return;
     }
-    if (ip_hdr_recv->ip_ttl <= 1) {
-        buf_len = sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr) + sizeof(struct sr_icmp_t3_hdr);
-        buf = (uint8_t*)malloc(buf_len);
-
-        /* set icmp */
-        sr_set_icmp3_hdr(buf + sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr),
-            11, 0, 1234/* mtu */, packet + sizeof(struct sr_ethernet_hdr));
-
-        /* set ip header */
-        struct sr_rt* next_hop = sr_get_LPM(sr, ip_hdr_recv->ip_src);
-
-        printf("ttl:.....%s\n", next_hop->interface);
-
-        struct sr_if* src_iface = sr_get_interface(sr, next_hop->interface);
-
-        sr_set_ip_hdr(buf + sizeof(struct sr_ethernet_hdr), 5, 4, 0, buf_len - sizeof(struct sr_ethernet_hdr),
-            ip_id_num, 0 /* offset */, 64, ip_protocol_icmp  ,ntohl(src_iface->ip)/* src */, ntohl(ip_hdr_recv->ip_src)/* dst */);
-        ip_id_num++;
-
-        /* set ethernet header */
-        sr_set_ether_hdr(buf, e_hdr_recv->ether_shost, e_hdr_recv->ether_dhost, ethertype_ip);
-
-        sr_send_packet(sr, buf, buf_len, next_hop->interface);
-        print_hdrs(buf, buf_len);
-        
-        free(buf);
-
-        return;
-    }
-
 
     if (sr_for_us(sr, packet + sizeof(struct sr_ethernet_hdr))) { /* for us */
 
@@ -271,9 +241,63 @@ void sr_handle_ip_pkt(struct sr_instance* sr, uint8_t* packet, unsigned int len,
 
 
     } else { /* not for us, forward*/
+
+        /* check TTL */
+        if (ip_hdr_recv->ip_ttl <= 1) {
+            buf_len = sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr) + sizeof(struct sr_icmp_t3_hdr);
+            buf = (uint8_t*)malloc(buf_len);
+
+            /* set icmp */
+            sr_set_icmp3_hdr(buf + sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr),
+                11, 0, 1234/* mtu */, packet + sizeof(struct sr_ethernet_hdr));
+
+            /* set ip header */
+            struct sr_rt* next_hop = sr_get_LPM(sr, ip_hdr_recv->ip_src);
+
+            struct sr_if* src_iface = sr_get_interface(sr, next_hop->interface);
+
+            sr_set_ip_hdr(buf + sizeof(struct sr_ethernet_hdr), 5, 4, 0, buf_len - sizeof(struct sr_ethernet_hdr),
+                ip_id_num, 0 /* offset */, 64, ip_protocol_icmp  ,ntohl(src_iface->ip)/* src */, ntohl(ip_hdr_recv->ip_src)/* dst */);
+            ip_id_num++;
+
+            /* set ethernet header */
+            sr_set_ether_hdr(buf, e_hdr_recv->ether_shost, e_hdr_recv->ether_dhost, ethertype_ip);
+
+            sr_send_packet(sr, buf, buf_len, next_hop->interface);
+            print_hdrs(buf, buf_len);
+            
+            free(buf);
+
+            return;
+        }
+
         struct sr_rt* next_hop = sr_get_LPM(sr, ip_hdr_recv->ip_dst);
         if (next_hop == NULL) {
             /* send icmp net unreachable*/
+            buf_len = sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr) + sizeof(struct sr_icmp_t3_hdr);
+            buf = (uint8_t*)malloc(buf_len);
+
+            /* set icmp */
+            sr_set_icmp3_hdr(buf + sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_ip_hdr),
+                3, 0, 1234/* mtu */, packet + sizeof(struct sr_ethernet_hdr));
+
+            /* set ip header */
+            struct sr_rt* next_hop = sr_get_LPM(sr, ip_hdr_recv->ip_src);
+
+            struct sr_if* src_iface = sr_get_interface(sr, next_hop->interface);
+
+            sr_set_ip_hdr(buf + sizeof(struct sr_ethernet_hdr), 5, 4, 0, buf_len - sizeof(struct sr_ethernet_hdr),
+                ip_id_num, 0 /* offset */, 64, ip_protocol_icmp  ,ntohl(src_iface->ip)/* src */, ntohl(ip_hdr_recv->ip_src)/* dst */);
+            ip_id_num++;
+
+            /* set ethernet header */
+            sr_set_ether_hdr(buf, e_hdr_recv->ether_shost, e_hdr_recv->ether_dhost, ethertype_ip);
+
+            sr_send_packet(sr, buf, buf_len, next_hop->interface);
+            print_hdrs(buf, buf_len);
+            
+            free(buf);
+
             return;
         }
         struct sr_if* src_iface = sr_get_interface(sr, next_hop->interface); /* src interface */
@@ -446,7 +470,6 @@ int sr_ip_sum_valid(uint8_t* packet, unsigned int len)
     struct sr_ip_hdr* ip_hdr = (struct sr_ip_hdr*)packet;
     uint16_t old_sum = ip_hdr->ip_sum;
     ip_hdr->ip_sum = 0;
-    printf("%d\n", len);
     if (old_sum != cksum(packet, len)) {
         return 0;
     }
