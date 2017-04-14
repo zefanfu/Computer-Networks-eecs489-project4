@@ -43,7 +43,7 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq* req)
 
                 /* set ethernet header */
                 struct sr_ethernet_hdr* old_e_hdr = (struct sr_ethernet_hdr*)pkt->buf;
-                sr_set_ether_hdr(buf_to_sent, old_e_hdr->ether_shost, old_e_hdr->ether_dhost, ethertype_ip);
+                sr_set_ether_hdr(buf_to_sent, old_e_hdr->ether_shost, src_iface->addr, ethertype_ip);
 
                 sr_send_packet(sr, buf_to_sent, len, next_hop->interface);
 
@@ -67,7 +67,7 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq* req)
             sr_set_arp_hdr(buf + sizeof(struct sr_ethernet_hdr), arp_op_request, iface->addr, iface->ip, NULL, req->ip);
 
             sr_send_packet(sr, buf, len, interface);
-            
+
             free(buf);
 
             req->sent = now;

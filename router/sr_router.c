@@ -305,9 +305,8 @@ void sr_handle_ip_pkt(struct sr_instance* sr, uint8_t* packet, unsigned int len,
         buf_len = len;
         buf = (uint8_t*)malloc(buf_len);
 
-        /* copy ip packert */
-        memcpy(buf + sizeof(struct sr_ethernet_hdr), packet + sizeof(struct sr_ethernet_hdr),
-            ntohs(ip_hdr_recv->ip_len));
+        /* copy packert */
+        memcpy(buf, packet, len);
 
         struct sr_ip_hdr* ip_hdr_send = (struct sr_ip_hdr*)(buf + sizeof(struct sr_ethernet_hdr));
         ip_hdr_send->ip_ttl--;
