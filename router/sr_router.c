@@ -81,8 +81,6 @@ void sr_handlepacket(struct sr_instance* sr,
     printf("*** -> Received packet of length %d \n",len);
 
     /* fill in code here */
-    print_hdrs(packet, len);
-
     struct sr_if* iface = sr_get_interface(sr, interface);
     struct sr_ethernet_hdr* e_hdr = 0;
 
@@ -264,7 +262,6 @@ void sr_handle_ip_pkt(struct sr_instance* sr, uint8_t* packet, unsigned int len,
             sr_set_ether_hdr(buf, e_hdr_recv->ether_shost, e_hdr_recv->ether_dhost, ethertype_ip);
 
             sr_send_packet(sr, buf, buf_len, next_hop->interface);
-            print_hdrs(buf, buf_len);
             
             free(buf);
 
@@ -294,7 +291,6 @@ void sr_handle_ip_pkt(struct sr_instance* sr, uint8_t* packet, unsigned int len,
             sr_set_ether_hdr(buf, e_hdr_recv->ether_shost, e_hdr_recv->ether_dhost, ethertype_ip);
 
             sr_send_packet(sr, buf, buf_len, next_hop->interface);
-            print_hdrs(buf, buf_len);
             
             free(buf);
 
